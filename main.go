@@ -13,43 +13,7 @@ import (
 
 var Release string
 
-func main() {
-	if Release == "" {
-		fmt.Println("Dev build")
-	} else {
-		gin.SetMode(gin.ReleaseMode)
-	}
-
-	dbName := "local.db"
-	primaryUrl := os.Getenv("TURSO_DATABASE_URL")
-	authToken := os.Getenv("TURSO_AUTH_TOKEN")
-	syncInterval := time.Minute
-
-	dir, err := os.MkdirTemp("", "libsql-*")
-	if err != nil {
-		fmt.Println("Error creating temporary directory:", err)
-		os.Exit(1)
-	}
-	defer os.RemoveAll(dir)
-
-	dbPath := filepath.Join(dir, dbName)
-
-	connector, err := libsql.NewEmbeddedReplicaConnector(dbPath, primaryUrl, libsql.WithAuthToken(authToken), libsql.WithSyncInterval(syncInterval))
-	if err != nil {
-		fmt.Println("Error creating connector:", err)
-		os.Exit(1)
-	}
-	defer connector.Close()
-
-	db := sql.OpenDB(connector)
-	defer db.Close()
-
-	// db.Exec("DROP TABLE links")
-	db.Exec(`CREATE TABLE IF NOT EXISTS links (
-		slug TEXT PRIMARY KEY,
-		target TEXT NOT NULL
-	)`)
-
+func setupRouter(db *sql.DB) *gin.Engine {
 	r := gin.Default()
 
 	// Redirect to target
@@ -102,7 +66,6 @@ func main() {
 		var link Link
 		c.Bind(&link)
 
-		fmt.Printf("%v", link)
 		db.Exec(`INSERT INTO links (slug, target) VALUES (?,?)
 			ON CONFLICT(slug) DO UPDATE SET target=?
 		`, link.Slug, link.Target, link.Target)
@@ -130,12 +93,58 @@ func main() {
 
 	})
 
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
-	})
-	r.Run() // listen and serve on 0.0.0.0:8080
+	return r
+}
+
+func prepare_db(db *sql.DB) {
+	db.Exec(`CREATE TABLE IF NOT EXISTS links (
+		slug TEXT PRIMARY KEY,
+		target TEXT NOT NULL
+	)`)
+}
+
+func main() {
+	if Release == "" {
+		fmt.Println("Dev build")
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	dbName := "local.db"
+	primaryUrl := os.Getenv("TURSO_DATABASE_URL")
+	authToken := os.Getenv("TURSO_AUTH_TOKEN")
+	syncInterval := time.Minute
+
+	dir, err := os.MkdirTemp("", "libsql-*")
+	if err != nil {
+		fmt.Println("Error creating temporary directory:", err)
+		os.Exit(1)
+	}
+	defer os.RemoveAll(dir)
+
+	dbPath := filepath.Join(dir, dbName)
+
+	connector, err := libsql.NewEmbeddedReplicaConnector(dbPath, primaryUrl, libsql.WithAuthToken(authToken), libsql.WithSyncInterval(syncInterval))
+	if err != nil {
+		fmt.Println("Error creating connector:", err)
+		os.Exit(1)
+	}
+	defer connector.Close()
+
+	db := sql.OpenDB(connector)
+	defer db.Close()
+
+	prepare_db(db)
+
+	r := setupRouter(db)
+
+	port := os.Getenv("PORT")
+
+	if port == "" {
+		port = "8080"
+	}
+
+	r.Run("0.0.0.0:" + port) // listen and serve on 0.0.0.0:8080
 }
 
 type Link struct {
