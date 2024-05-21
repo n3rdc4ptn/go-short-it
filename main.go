@@ -11,7 +11,15 @@ import (
 	"github.com/tursodatabase/go-libsql"
 )
 
+var Release string
+
 func main() {
+	if Release == "" {
+		fmt.Println("Dev build")
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	dbName := "local.db"
 	primaryUrl := os.Getenv("TURSO_DATABASE_URL")
 	authToken := os.Getenv("TURSO_AUTH_TOKEN")
