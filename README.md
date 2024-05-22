@@ -10,6 +10,10 @@ Compile the project and start it with the following environment variables:
 ```bash
 export TURSO_AUTH_TOKEN="YOUR_AUTH_TOKEN"
 export TURSO_DATABASE_URL="YOUR_DATABASE_URL"
+
+export PORT=8080
+# Secret for generating auth tokens
+export APP_SECRET="test"
 ```
 
 You can create a turso DB using the turso [guide](https://docs.turso.tech/quickstart).
